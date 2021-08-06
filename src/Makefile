@@ -14,7 +14,7 @@ throw.s: throw.cpp
 		@g++ -S throw.cpp
 
 app: main.o throw.o myabicpp.o
-		@gcc build/obj/main.o build/obj/throw.o build/obj/myabicpp.o -O0 -ggdb -o build/app
+		@gcc build/obj/main.o build/obj/throw.o build/obj/myabicpp.o -O0 -g -ggdb -o build/app
 		@./build/app
 		@rm -rf build
 		
