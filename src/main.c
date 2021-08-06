@@ -2,7 +2,7 @@
 
 int main()
 {
-    sepuku();
+    seppuku();
 
     return 0;
 }

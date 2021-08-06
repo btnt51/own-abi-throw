@@ -6,7 +6,7 @@ struct Exception{};
 extern "C" {
 #endif
 
-    void sepuku();
+    void seppuku();
 
 #ifdef __cplusplus
 }
