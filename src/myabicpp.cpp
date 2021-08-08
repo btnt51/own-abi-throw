@@ -69,6 +69,32 @@ void __cxa_end_catch()
     printf("end FTW\n");
 }
 
+
+struct LSDA_Header{
+    uint8_t start_encoding;
+    uint8_t type_encoding;
+    uint8_t ttype;
+
+};
+
+
+struct LSDA_CS_Header
+{
+    uint8_t encoding;
+    uint8_t length;
+};
+
+
+struct LSDA_CS
+{
+    uint8_t start;
+    uint8_t len;
+    uint8_t lp;
+    uint8_t action;
+};
+
+
+
 _Unwind_Reason_Code __gxx_personality_v0 (
                      int version, _Unwind_Action actions, uint64_t exceptionClass,
                      _Unwind_Exception* unwind_exception, _Unwind_Context* context)
@@ -79,6 +105,10 @@ _Unwind_Reason_Code __gxx_personality_v0 (
         return _URC_HANDLER_FOUND;
     } else if (actions & _UA_CLEANUP_PHASE) {
         printf("Personality function, cleanup\n");
+        const uint8_t* lsda = (const uint8_t*)_Unwind_GetLanguageSpecificData(context);
+        uintptr_t ip = _Unwind_GetIP(context) -1;
+        uintptr_t funcStart = _Unwind_GetRegionStart(context);
+        uintptr_t offset = ip - funcStart;
         return _URC_INSTALL_CONTEXT;
     } else {
         printf("Personality function, error\n");
