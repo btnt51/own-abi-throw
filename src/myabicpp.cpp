@@ -16,7 +16,7 @@ extern "C" {
 
 void* __cxa_allocate_exception(size_t thrown_size)
 {
-    printf("alloc ex %i\n", thrown_size);
+    printf("alloc ex %i\n", (int)(thrown_size));
     if (thrown_size > EXCEPTION_BUFF_SIZE) printf("Exception too big");
     return &exception_buff;
 }
@@ -69,8 +69,20 @@ void __cxa_end_catch()
     printf("end FTW\n");
 }
 
+typedef const uint8_t * LSDA_ptr;
 
 struct LSDA_Header{
+    LSDA_Header(LSDA_ptr *lsda){
+        LSDA_ptr read_ptr = *lsda;
+
+        lsda_start_encoding = read_ptr[0];
+        lsda_type_encoding = read_ptr[1];
+        lsda_call_site_table_length = read_ptr[2];
+
+        *lsda = read_ptr +sizeof(LSDA_Header);
+    }
+
+
     uint8_t lsda_start_encoding;
     uint8_t lsda_type_encoding;
     uint8_t lsda_call_site_table_length;
@@ -78,21 +90,32 @@ struct LSDA_Header{
 };
 
 
-struct LSDA_Call_Site_Header
+struct LSDA_CS_Header
 {
+    LSDA_CS_Header(LSDA_ptr *lsda)
+    {
+        LSDA_ptr read_ptr = *lsda;
+        encoding = read_ptr[0];
+        length = read_ptr[1];
+        *lsda = read_ptr + sizeof(LSDA_CS_Header);
+    }
+
+
     uint8_t encoding;
     uint8_t length;
 };
 
 
-struct LSDA_Call_Site
+struct LSDA_CS
 {
-    LSDA_Call_Site(const uint8_t *ptr)
+    LSDA_CS(LSDA_ptr *lsda)
     {
-        cs_start = ptr[0];
-        cs_len = ptr[1];
-        cs_lp = ptr[2];
-        cs_action = ptr[3];
+        LSDA_ptr read_ptr = *lsda;
+        cs_start = read_ptr[0];
+        cs_len = read_ptr[1];
+        cs_lp = read_ptr[2];
+        cs_action = read_ptr[3];
+        *lsda = read_ptr + sizeof(LSDA_CS);
     }
 
 
@@ -114,28 +137,30 @@ _Unwind_Reason_Code __gxx_personality_v0 (
         return _URC_HANDLER_FOUND;
     } else if (actions & _UA_CLEANUP_PHASE) {
         printf("Personality function, cleanup\n");
-        const uint8_t* lsda = (const uint8_t*)_Unwind_GetLanguageSpecificData(context);
-        LSDA_Header *header = (LSDA_Header *)(lsda);
-        LSDA_Call_Site_Header *cs_header = (LSDA_Call_Site_Header*)(lsda + sizeof(LSDA_Header));
+        LSDA_ptr lsda = (uint8_t*)_Unwind_GetLanguageSpecificData(context);
+        LSDA_Header header(&lsda);
+        LSDA_CS_Header cs_header(&lsda);
 
-        size_t cs_in_table = cs_header->length / sizeof(LSDA_Call_Site);
+        const LSDA_ptr cs_table_end = lsda + cs_header.length;
 
-        const uint8_t *cs_table_base = lsda + sizeof(LSDA_Header) + sizeof(LSDA_Call_Site_Header);
+        const uint8_t *lsda_cs_table_base = lsda + sizeof(LSDA_Header) + sizeof(LSDA_CS_Header);
 
-        for(size_t i = 0; i < cs_in_table; i++)
+        while(lsda < lsda_cs_table_base)
         {
-            const uint8_t *offset = &cs_table_base[i * sizeof(LSDA_Call_Site)];
-            LSDA_Call_Site cs(offset);
-            printf("Found a CS:\n");
-            printf("\tcs_start: %i\n", cs.cs_start);
-            printf("\tcs_len: %i\n", cs.cs_len);
-            printf("\tcs_lp: %i\n", cs.cs_lp);
-            printf("\tcs_action: %i\n", cs.cs_action);
-        }
+            LSDA_CS cs(&lsda);
 
-        uintptr_t ip = _Unwind_GetIP(context) -1;
-        uintptr_t funcStart = _Unwind_GetRegionStart(context);
-        uintptr_t offset = ip - funcStart;
+            if(cs.cs_lp)
+            {
+                int r0 = __builtin_eh_return_data_regno(0);
+                int r1 = __builtin_eh_return_data_regno(1);
+
+                _Unwind_SetGR(context, r0, (uintptr_t)(unwind_exception));
+
+                _Unwind_SetGR(context, r1, (uintptr_t)(1));
+                uintptr_t funcStart = _Unwind_GetRegionStart(context);
+                _Unwind_SetIP(context, funcStart + cs.cs_lp);
+            }
+        }
         return _URC_INSTALL_CONTEXT;
     } else {
         printf("Personality function, error\n");
