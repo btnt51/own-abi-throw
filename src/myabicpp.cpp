@@ -137,6 +137,9 @@ _Unwind_Reason_Code __gxx_personality_v0 (
         return _URC_HANDLER_FOUND;
     } else if (actions & _UA_CLEANUP_PHASE) {
         printf("Personality function, cleanup\n");
+
+        uintptr_t throw_ip = _Unwind_GetIP(context) - 1;
+
         LSDA_ptr lsda = (uint8_t*)_Unwind_GetLanguageSpecificData(context);
         LSDA_Header header(&lsda);
         LSDA_CS_Header cs_header(&lsda);
@@ -149,17 +152,25 @@ _Unwind_Reason_Code __gxx_personality_v0 (
         {
             LSDA_CS cs(&lsda);
 
-            if(cs.cs_lp)
-            {
-                int r0 = __builtin_eh_return_data_regno(0);
-                int r1 = __builtin_eh_return_data_regno(1);
+            if(not cs.cs_lp) continue;
+        
 
-                _Unwind_SetGR(context, r0, (uintptr_t)(unwind_exception));
+            uintptr_t funcStart = _Unwind_GetRegionStart(context);
 
-                _Unwind_SetGR(context, r1, (uintptr_t)(1));
-                uintptr_t funcStart = _Unwind_GetRegionStart(context);
-                _Unwind_SetIP(context, funcStart + cs.cs_lp);
-            }
+            uintptr_t try_start = funcStart + cs.cs_start;
+            uintptr_t try_end = try_start + cs.cs_len;
+
+            if(throw_ip < try_start) continue;
+            if(throw_ip > try_end) continue;
+
+            int r0 = __builtin_eh_return_data_regno(0);
+            int r1 = __builtin_eh_return_data_regno(1);
+
+            _Unwind_SetGR(context, r0, (uintptr_t)(unwind_exception));
+
+            _Unwind_SetGR(context, r1, (uintptr_t)(1));
+            _Unwind_SetIP(context, funcStart + cs.cs_lp);
+            break;
         }
         return _URC_INSTALL_CONTEXT;
     } else {

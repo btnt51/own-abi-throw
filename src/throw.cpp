@@ -8,6 +8,12 @@ void raise() {
 
 void try_but_dont_catch() {
     try {
+        printf("Running a try which will never throw.\n");
+    } catch(Fake_Exception&) {
+        printf("Exception caught... with the wrong catch!\n");
+    }
+
+    try {
         raise();
     } catch(Fake_Exception&) {
         printf("Caught a Fake_Exception!\n");
@@ -19,6 +25,8 @@ void try_but_dont_catch() {
 void catchit() {
     try {
         try_but_dont_catch();
+    } catch(Fake_Exception&) {
+        printf("Caught a Fake_Exception!\n");
     } catch(Exception&) {
         printf("Caught an Exception!\n");
     }
